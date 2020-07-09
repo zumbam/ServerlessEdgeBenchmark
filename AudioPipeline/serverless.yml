@@ -1,0 +1,104 @@
+plugins:
+  - serverless-plugin-greengrass
+
+custom: 
+  # custom variables
+  resultsBucketName: edgebench-audio-pipeline-results-1024
+  audio_topic: audio
+  audio_result_topic: audio_result
+  audio_cloud_topic: audio_cloud
+  
+  greengrass:
+    groupId: 8e272a63-c49b-4b26-a162-3a7451b2a390
+    include:
+      - edge-lambda-audio-coldstart-1024 # Only function "myfunctionA" will be deployed to Greengrass
+    defaults:
+      autoDeploy: true # set to "false" to disable automatic deploy after "sls deploy"
+      pinned: false # check if is a long running or on-demand
+      memorySize: 16384  # 512 MB expressed in KB
+      timeout: 6 # function timeout
+      encodingType: json # The expected encoding type of the input payload, can be binary or json.
+      accessSysfs: false # allowed to access the host's /sys folder
+      environment: 
+        myVarA: 'myValueA' # deployed to Greengrass for all functions
+    subscriptions: # global subscription
+    - source: arn:aws:iot:eu-central-1:933537297868:thing/SpeechSensor # a Lambda function ARN, a connector ARN, "cloud" or "GGShadowService"
+      target: "cloud"
+      subject: '${self:custom.audio_topic}'
+    - source: arn:aws:iot:eu-central-1:933537297868:thing/SpeechSensor
+      target: "cloud"
+      subject: '${self:custom.audio_cloud_topic}'
+     
+functions:
+  cloud-lambda-audio-coldstart-1024:
+    environment: {RESULTS_BUCKET: '${self:custom.resultsBucketName}'}
+    events:
+    # - {s3: edgebench-audio-pipeline-upload-1024}
+    - iot:
+        name: 'audio_cloud_event'
+        description: "This invoke a audio lambda Function in the cloud"
+        sql:  "SELECT *, parse_time(\\\"yyyy-MM-dd'T'HH:mm:ss.SSSSSS\\\", timestamp() ) AS iot_hub_send_time FROM 'audio_cloud'"          
+        sqlVersion: "2016-03-23"
+    handler: audio_pipeline.lambda_handler
+    memorySize: 1024
+    timeout: 6
+
+    
+
+  edge-lambda-audio-coldstart-1024:
+    handler: audio_pipeline_edge.lambda_handler
+    greengrass:
+       # override handler for Greengrass deployed function
+      pinned: false # override default values
+      memorySize: 524588
+      # environment: 
+      #   myVarC: 'myValueC' # deployed to Greengrass only for this function
+      # resources: 
+      #   - 06751cfe-88a1-4a56-9bd9-c06c27632db1:rw
+      subscriptions: 
+      - source: arn:aws:iot:eu-central-1:933537297868:thing/SpeechSensor # a Lambda function ARN, a connector ARN, "cloud" or "GGShadowService"
+        subject: '${self:custom.audio_topic}'
+      - source: "cloud" 
+        subject: '${self:custom.audio_topic}' 
+      - target: "cloud"
+        subject: '${self:custom.audio_result_topic}'
+      
+# Rules:
+#    - ruleName: "edge_audio_result"
+#      topicRulePayload:
+#        sql: >-
+#         SELECT invoke_time, func_start, message_send_time, message_id, device, translation, lambdastatus, invocation_count, funccompleteutctime, timestamp() as iot_hub_send_time FROM 'audio_result'
+#        description: "Sends Audio Results to S3 bucket"
+#        ruleDisabled: False
+#        awsIotSqlVersion: "2016-03-23"
+#        actions:
+#          - s3:
+#              bucketName: '${self:custom.resultsBucketName}'
+#              key: 
+#               - Fn::Join:
+#                 - '_'
+#                 - - 'edge'
+#                   - '${message_id}.json'
+
+provider:
+  region: eu-central-1
+  iamRoleStatements:
+  - Action: ['s3:*']
+    Effect: Allow
+    Resource:
+    - Fn::Join:
+      - ''
+      - - 'arn:aws:s3:::'
+        - {Ref: ServerlessDeploymentBucket}
+    - arn:aws:s3:::edgebench-audio-pipeline-upload-1024/*
+    - arn:aws:s3:::${self:custom.resultsBucketName}/*
+  name: aws
+  runtime: python3.7
+resources:
+  Resources:
+    resultsBucketName:
+      Properties: {BucketName: '${self:custom.resultsBucketName}'}
+      Type: AWS::S3::Bucket
+package:
+  exclude: [node_modules/**, LOGS/**, UPLOADS/**, RESULTS/**]
+service: aws-edgebench-audio

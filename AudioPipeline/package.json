@@ -1,0 +1,14 @@
+{
+  "name": "audio-pipline",
+  "version": "1.0.0",
+  "description": "#### Dependencies before installing the python package: ``` sudo apt-get install libasound2-dev sudo apt-get install -y python python-dev python-pip build-essential swig git libpulse-dev sudo pip install pocketsphinx -t <my_folder> ```",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "serverless-plugin-greengrass": "^1.3.4"
+  }
+}
