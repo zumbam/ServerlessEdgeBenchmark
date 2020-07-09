@@ -1,0 +1,6 @@
+/*
+!.gitignore
+!/AudioSensor
+/AudioSensor/certs
+/AudioSensor/device_config.json
+!/AudioPipeline
